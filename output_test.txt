@@ -1,0 +1,69 @@
+
+====================================================
+[AI] SUGGESTION FOR THIS TURN
+====================================================
+
+🎯 RECOMMENDED: Attack
+💡 REASON: Enemy healer is sustaining the team.
+📊 CONFIDENCE: 85%
+
+[!] THREAT ANALYSIS:
+   • Enemy DPS: 100% HP | Threat: CRITICAL (1.5)
+   • Enemy Tank: 100% HP | Threat: LOW (0.5)
+   • Enemy Healer: 100% HP | Threat: MEDIUM (1.0)
+
+[S] ALLIED STATUS:
+   [O] Tank: 100% HP (HEALTHY)
+   [O] DPS: 100% HP (HEALTHY)
+   [O] Healer: 100% HP (HEALTHY)
+
+====================================================
+
+
+====================================================
+Turn 1 - LLM Analysis
+====================================================
+
+"Let none survive!"
+
+Action: Attack -> Target 3
+
+Narrative:
+The unit launches a ferocious assault!
+ANNIHILATING BLOW — the attack connects perfectly!
+Target: Enemy DPS (HP: 0%)
+Damage dealt: 70 HP
+Target eliminated!
+
+Strategic reasoning:
+[AGGRESSIVE TACTICAL ANALYSIS] Execution priority — enemy near elimination. Finishing blow recommended. 
+
+Alternatives considered:
+  • Attack Enemy Tank - Alternative target with different threat priority
+  • Defend - Conservative approach — preserve resources
+
+Threat: LOW - Low threat — tactical advantage held!
+Confidence: [███████████████████ ] 99%
+====================================================
+
+
+====================================================
+[AI] SUGGESTION FOR THIS TURN
+====================================================
+
+🎯 RECOMMENDED: Attack
+💡 REASON: Enemy healer is sustaining the team.
+📊 CONFIDENCE: 85%
+
+[!] THREAT ANALYSIS:
+   • Enemy Tank: 100% HP | Threat: LOW (0.5)
+   • Enemy Healer: 100% HP | Threat: MEDIUM (1.0)
+
+[S] ALLIED STATUS:
+   [O] Tank: 63% HP (HEALTHY)
+   [O] DPS: 100% HP (HEALTHY)
+   [O] Healer: 100% HP (HEALTHY)
+
+====================================================
+
+
