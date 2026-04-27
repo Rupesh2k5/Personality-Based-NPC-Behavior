@@ -1287,23 +1287,87 @@ class UltimateRPGUI:
     def _on_mode_change(self):
         """Handle mode change"""
         if not self.human_choice_mode.get():
-            # AI Auto mode - disable human buttons
-            for _, btn in self.action_buttons:
-                btn.config(state=tk.DISABLED)
-            for btn in self.target_buttons:
-                btn.config(state=tk.DISABLED)
-            for btn in self.reason_buttons:
-                btn.config(state=tk.DISABLED)
-            self.confirm_btn.config(state=tk.DISABLED)
+            # AI Auto mode - disable human buttons, enable auto
+            # Safely disable action buttons
+            if hasattr(self, 'action_buttons') and self.action_buttons:
+                for item in self.action_buttons:
+                    if isinstance(item, tuple) and len(item) == 2:
+                        _, btn = item
+                        try:
+                            btn.config(state=tk.DISABLED)
+                        except:
+                            pass
+                    else:
+                        try:
+                            item.config(state=tk.DISABLED)
+                        except:
+                            pass
+            
+            # Safely disable target buttons
+            if hasattr(self, 'target_buttons') and self.target_buttons:
+                for btn in self.target_buttons:
+                    try:
+                        btn.config(state=tk.DISABLED)
+                    except:
+                        pass
+            
+            # Safely disable reason buttons
+            if hasattr(self, 'reason_buttons') and self.reason_buttons:
+                for btn in self.reason_buttons:
+                    try:
+                        btn.config(state=tk.DISABLED)
+                    except:
+                        pass
+            
+            try:
+                self.confirm_btn.config(state=tk.DISABLED)
+            except:
+                pass
+            
+            # Stop any running timer
+            self._stop_timer()
+            
+            # Display AI analysis for AI mode
+            if self.active:
+                self._display_full_ai_analysis()
+            
+            # Show status
+            self.status.config(text="🤖 AI MODE ACTIVE - AI will play automatically", fg='#00ff88')
+            
+            # Start AI auto play if active
+            if self.active and not self.auto:
+                self.root.after(500, self._auto_single_turn)
+                
         else:
             # Human mode - enable action buttons
-            for _, btn in self.action_buttons:
-                btn.config(state=tk.NORMAL)
+            if hasattr(self, 'action_buttons') and self.action_buttons:
+                for item in self.action_buttons:
+                    if isinstance(item, tuple) and len(item) == 2:
+                        _, btn = item
+                        try:
+                            btn.config(state=tk.NORMAL)
+                        except:
+                            pass
+                    else:
+                        try:
+                            item.config(state=tk.NORMAL)
+                        except:
+                            pass
+            
+            self.status.config(text="👤 HUMAN MODE - Make your move!", fg='#ffaa00')
+            
+            # Display AI analysis for human mode as well
+            if self.active:
+                self._display_full_ai_analysis()
+            
+            # Start timer if active
+            if self.active:
+                self._start_timer()
 
     def _build_action_buttons(self):
         for w in self.act_btn_frame.winfo_children():
             w.destroy()
-        self.action_buttons = []
+        self.action_buttons = []  # Store as list of buttons only, not tuples
         defs = [
             (0, "⚔️ Attack", "#aa2222"),
             (1, "🛡️ Defend", "#225599"),
@@ -1317,7 +1381,8 @@ class UltimateRPGUI:
                             bg=bg, fg="white", font=("Segoe UI", 9, "bold"),
                             relief=tk.RAISED, cursor="hand2", width=11)
             btn.pack(side=tk.LEFT, padx=3)
-            self.action_buttons.append((act_id, btn))
+            self.action_buttons.append(btn)  # Store just the button
+            btn.act_id = act_id  # Store action id as attribute
 
     def _select_action(self, act_id):
         self.selected_action = act_id
@@ -1325,10 +1390,9 @@ class UltimateRPGUI:
         self.selected_reason = None
         self.confirm_btn.config(state=tk.DISABLED)
 
-        for _, btn in self.action_buttons:
+        for btn in self.action_buttons:
             btn.config(relief=tk.RAISED)
-        for _, btn in self.action_buttons:
-            if _ == act_id:
+            if hasattr(btn, 'act_id') and btn.act_id == act_id:
                 btn.config(relief=tk.SUNKEN)
 
         self._build_target_buttons(act_id)
@@ -1359,15 +1423,16 @@ class UltimateRPGUI:
                             bg=btn_color, fg="white",
                             font=("Segoe UI", 9), relief=tk.RAISED, cursor="hand2", width=12)
             btn.pack(side=tk.LEFT, padx=3)
+            btn.target_idx = idx  # Store target index
             self.target_buttons.append(btn)
 
     def _select_target(self, idx):
         self.selected_target = idx
         for btn in self.target_buttons:
             btn.config(relief=tk.RAISED)
-        # Find and highlight selected button
+        # Find and highlight selected button by comparing target index
         for btn in self.target_buttons:
-            if btn.cget('text') == idx:
+            if hasattr(btn, 'target_idx') and btn.target_idx == idx:
                 btn.config(relief=tk.SUNKEN)
         self._build_reasoning_buttons()
 
@@ -1589,14 +1654,18 @@ class UltimateRPGUI:
         if info.get('killed_enemy'):
             self._track_elimination(target_idx, 0, info.get('critical', False))
 
-        # Get LLM explanation for AI comparison
+        # Get LLM explanation
         explanation = self.llm_engine.get_full_explanation(
             action, self.env.chars, self.current_personality.get(),
             info, self.revenge_mode, False, self.difficulty.get(), self.turn_count
         )
 
-        # Display human move analysis (APPENDS, doesn't replace)
-        if not auto:
+        # Display analysis based on mode
+        if auto:
+            # AI mode - show AI move analysis
+            self._display_ai_move_analysis(act_id, target_idx, info, explanation)
+        else:
+            # Human mode - show human move analysis
             self._display_human_move_analysis(act_id, target_idx, info)
             self._show_feedback(act_id, target_idx, info)
 
@@ -1618,7 +1687,153 @@ class UltimateRPGUI:
             return
 
         self._start_new_turn()
+    
+    def _display_ai_move_analysis(self, act_id, target_idx, info, explanation):
+        """Display AI's move analysis for AI mode"""
+        t = self.reasoning_text
+        
+        action_names = ['Attack', 'Defend', 'Ability', 'Reposition', 'Heal']
+        target_names = ['Tank', 'DPS', 'Healer', 'Enemy DPS', 'Enemy Tank', 'Enemy Healer']
+        
+        t.insert(tk.END, "═" * 60 + "\n", "header")
+        t.insert(tk.END, f"🤖 TURN {self.turn_count} — AI MOVE\n", "header")
+        t.insert(tk.END, "═" * 60 + "\n\n", "header")
+        
+        t.insert(tk.END, f"🎯 AI ACTION: {action_names[act_id]} → {target_names[target_idx]}\n\n", "action")
+        
+        t.insert(tk.END, f"📖 {explanation['narrative']}\n\n", "reasoning")
+        
+        t.insert(tk.END, f"💭 {explanation['reasoning']}\n\n", "reasoning")
+        
+        threat_tag = f"threat_{explanation['threat_level']}"
+        t.insert(tk.END, f"⚠️ THREAT LEVEL: {explanation['threat_level'].upper()}\n", threat_tag)
+        t.insert(tk.END, f"   {explanation['threat_narrative']}\n\n", "reasoning")
+        
+        conf_pct = int(explanation['confidence'] * 100)
+        conf_bar = "█" * (conf_pct // 5)
+        t.insert(tk.END, f"📊 CONFIDENCE: [{conf_bar:<20s}] {conf_pct}%\n\n", "confidence")
+        
+        if info.get('damage'):
+            t.insert(tk.END, f"💥 Damage dealt: {info['damage']} HP\n", "action")
+        if info.get('heal_amount'):
+            t.insert(tk.END, f"💚 Healing done: {info['heal_amount']} HP\n", "action")
+        if info.get('killed_enemy'):
+            t.insert(tk.END, "☠️ TARGET ELIMINATED!\n", "action")
+        
+        t.insert(tk.END, "\n" + "═" * 60 + "\n\n", "header")
+        t.see(tk.END)
+        
+    def _start_new_turn(self):
+        """Start new turn - SHOW FRESH AI ANALYSIS"""
+        self.selected_action = None
+        self.selected_target = None
+        self.selected_reason = None
+        self.confirm_btn.config(state=tk.DISABLED)
+        self.hint_label.config(text="")
 
+        # Rebuild UI
+        self._build_action_buttons()
+        self._build_puzzle_prompt()
+
+        # Clear button frames
+        for w in self.tgt_btn_frame.winfo_children():
+            w.destroy()
+        for w in self.rsn_btn_frame.winfo_children():
+            w.destroy()
+
+        # ✅ DISPLAY FRESH AI ANALYSIS (works for both modes)
+        self._display_full_ai_analysis()
+
+        if self.human_choice_mode.get():
+            self._start_timer()
+        else:
+            # In AI mode, automatically take a turn
+            if self.active and not self.auto:
+                self.root.after(500, self._auto_single_turn)
+
+    def _auto_single_turn(self):
+        """Take a single AI turn (for AI mode without auto loop)"""
+        try:
+            if self.active and not self.human_choice_mode.get() and not self.auto and hasattr(self, 'model') and self.model:
+                action, _ = self.model.predict(self.obs, deterministic=False)
+                self._execute_action(int(action[1]), int(action[0]), auto=True)
+        except Exception as e:
+            print(f"Auto turn error: {e}")
+
+    def _display_full_ai_analysis(self):
+        """Display COMPLETE AI analysis at START of every turn (works for both modes)"""
+        if not self.active or not hasattr(self, 'env'):
+            return
+
+        t = self.reasoning_text
+
+        # Clear and refresh with fresh analysis
+        t.delete(1.0, tk.END)
+
+        # Get best AI action
+        best_action = self._get_best_ai_action()
+
+        # Get threat analysis
+        threats = []
+        roles = ['Tank', 'DPS', 'Healer']
+        for i in range(3, 6):
+            if self.env.chars[i][2] > 0:
+                role = roles[self.env.chars[i][4]]
+                hp_pct = self.env.chars[i][2] / self.env.chars[i][3] * 100
+                threat_val = self.env.threat_matrix[0][i - 3] if hasattr(self.env, 'threat_matrix') else 1.0
+                threat_level = "CRITICAL" if threat_val > 1.3 else "HIGH" if threat_val > 1.0 else "MEDIUM" if threat_val > 0.7 else "LOW"
+                threats.append(f"   • E{i-3} {role}: {hp_pct:.0f}% HP | {threat_level}")
+
+        # Allied status
+        allies_status = []
+        for i in range(3):
+            if self.env.chars[i][2] > 0:
+                role = roles[self.env.chars[i][4]]
+                hp_pct = self.env.chars[i][2] / self.env.chars[i][3] * 100
+                status = "CRITICAL" if hp_pct < 30 else "WOUNDED" if hp_pct < 60 else "HEALTHY"
+                emoji = "🔴" if status == "CRITICAL" else "🟡" if status == "WOUNDED" else "🟢"
+                allies_status.append(f"   {emoji} {role}: {hp_pct:.0f}% HP")
+
+        # === DISPLAY AI ANALYSIS ===
+        mode_text = "AI MODE - RECOMMENDED MOVE" if not self.human_choice_mode.get() else "AI ANALYSIS"
+        
+        t.insert(tk.END, "═" * 60 + "\n", "header")
+        t.insert(tk.END, f"🤖 TURN {self.turn_count + 1} — {mode_text}\n", "header")
+        t.insert(tk.END, "═" * 60 + "\n\n", "header")
+
+        t.insert(tk.END, f"🎯 RECOMMENDED: {best_action['action']}\n", "action")
+        t.insert(tk.END, f"💡 REASON: {best_action['reason']}\n\n", "reasoning")
+
+        if threats:
+            t.insert(tk.END, "⚠️ THREAT ANALYSIS:\n", "threat")
+            for threat in threats:
+                t.insert(tk.END, threat + "\n", "threat")
+            t.insert(tk.END, "\n", "threat")
+
+        if allies_status:
+            t.insert(tk.END, "🛡️ ALLIED STATUS:\n", "header")
+            for status in allies_status:
+                t.insert(tk.END, status + "\n", "reasoning")
+            t.insert(tk.END, "\n", "reasoning")
+
+        # Battle cry
+        battle_cries = [
+            "⚔️ Charge — show no mercy!",
+            "🛡️ Hold the line — stand strong!",
+            "🎯 Execute the plan!",
+            "🌀 For chaos and glory!"
+        ]
+        t.insert(tk.END, f'🗣️ "{random.choice(battle_cries)}"\n\n', "action")
+
+        if self.human_choice_mode.get():
+            t.insert(tk.END, "═" * 60 + "\n", "header")
+            t.insert(tk.END, "👤 YOUR TURN — Make your move!\n\n", "action")
+        else:
+            t.insert(tk.END, "═" * 60 + "\n", "header")
+            t.insert(tk.END, "🤖 AI PLAYING — Watch the analysis above\n\n", "action")
+
+        t.see(1.0)
+    
     def _process_enemy_attacks(self):
         cfg = self._diff_cfg()
         alive = [c for c in self.env.chars[3:] if c[2] > 0]
@@ -1860,9 +2075,14 @@ class UltimateRPGUI:
                 self.auto_play_id = None
 
     def _auto_loop(self):
-        if self.auto and self.active:
+        if self.auto and self.active and not self.human_choice_mode.get():
+            # Get action
             action, _ = self.model.predict(self.obs, deterministic=False)
+            
+            # Execute with auto=True to trigger AI move analysis
             self._execute_action(int(action[1]), int(action[0]), auto=True)
+            
+            # Schedule next turn
             self.auto_play_id = self.root.after(1400, self._auto_loop)
 
     def _get_timer_seconds(self):
